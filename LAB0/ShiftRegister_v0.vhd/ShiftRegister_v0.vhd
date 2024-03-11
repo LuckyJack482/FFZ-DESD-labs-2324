@@ -17,22 +17,20 @@ entity ShiftRegister_v0 is
     --------------------------------- 
     );
 end ShiftRegister_v0;
---
 
-
-architecture Behavioral of top is
+architecture Behavioral of ShiftRegister_v0 is
 
     signal dataBus : std_logic_vector(3 DOWNTO 0);
 
 begin
 
-    shift process (clk, reset)
+    shift : process (clk, reset)
     begin
         if reset = '1' then
             dataBus <= (Others => '0');
         
         elsif rising_edge(clk) then    
-            for I in (dataBus'HIGH - 1 DOWNTO dataBus'LOW) then
+            for I in dataBus'HIGH - 1 DOWNTO dataBus'LOW loop
                 dataBus(i+1) <= dataBus(i);
             end loop;
             dataBus (0) <= din;
