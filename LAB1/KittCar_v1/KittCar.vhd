@@ -53,56 +53,57 @@ begin
 		leds <= (Others => '1'); 
 	end generate led1;
 	
-	normal: if NUM_OF_LEDS > 1 generate
-		blink : process(clk, reset)
-		begin	
-			if reset = '1' then
-				leds <= (0 => '1', Others => '0');
-				counter <= (Others => '0');
-				counter_sw <= (Others => '0');
-				direction <= '1';
-				sw_reg <= unsigned(sw);
-				index_led <= 0;
-				
-			elsif rising_edge(clk) then	
-				counter <= counter + 1;
-					
-				if counter > DELTA_T then
-					counter_sw <= counter_sw + 1;
-					counter <= (Others => '0');
-					sw_reg <= unsigned(sw);
-					
-					if counter_sw >= sw_reg then 
-						counter_sw <= (Others => '0');
-				    leds <= (Others => '0');
-						if direction = '0' then
-							if index_led = NUM_OF_LEDS - 1 then 
-								direction <= '1';
-								index_led <= index_led - 1;
-								leds(index_led - 1) <= '1';
-						  else
-						    index_led <= index_led + 1;
-                leds(index_led + 1) <= '1';
-							end if;
-						
-						else -- direction = '1'
-							if index_led = 0 then
-								direction <= '0';
-								index_led <= index_led + 1;
-                leds(index_led + 1) <= '1';
-							else
+  normal: if NUM_OF_LEDS > 1 generate
+    blink : process(clk, reset)
+    begin	
+      if reset = '1' then
+        leds <= (0 => '1', Others => '0');
+        counter <= (Others => '0');
+        counter_sw <= (Others => '0');
+        direction <= '1';
+        sw_reg <= unsigned(sw);
+        index_led <= 0;
+
+      elsif rising_edge(clk) then	
+        counter <= counter + 1;
+
+        if counter > DELTA_T then
+          counter_sw <= counter_sw + 1;
+          counter <= (Others => '0');
+          sw_reg <= unsigned(sw);
+
+          if counter_sw >= sw_reg then 
+            counter_sw <= (Others => '0');
+            leds <= (Others => '0');
+
+            if direction = '0' then -- towards left
+              if index_led = NUM_OF_LEDS - 1 then 
+                direction <= '1';
                 index_led <= index_led - 1;
                 leds(index_led - 1) <= '1';
-							end if;
-							
+              else
+                index_led <= index_led + 1;
+                leds(index_led + 1) <= '1';
+              end if;
 
-						end if;
-						
-					end if;			
-				
-				end if;
-				
-			end if;
-		end process blink;
-	end generate normal;
+            else -- direction = '1', towards right
+              if index_led = 0 then
+                direction <= '0';
+                index_led <= index_led + 1;
+                leds(index_led + 1) <= '1';
+              else
+                index_led <= index_led - 1;
+                leds(index_led - 1) <= '1';
+              end if;
+
+
+            end if;
+
+          end if;			
+
+        end if;
+
+      end if;
+    end process blink;
+  end generate normal;
 end Behavioral;
