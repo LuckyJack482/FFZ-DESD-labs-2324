@@ -1,0 +1,7 @@
+# compile vhdl design source files
+vhdl xil_defaultlib  \
+"../../../../jstk_uart_bridge_leds.srcs/sources_1/new/jstk_uart_bridge_leds.vhd" \
+"../../../../jstk_uart_bridge_leds.srcs/sim_3/imports/Lab2/tb_jstk_uart_bridge_master.vhd" \
+
+# Do not sort compile order
+nosort
