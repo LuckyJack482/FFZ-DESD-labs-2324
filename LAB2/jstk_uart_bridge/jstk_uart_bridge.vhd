@@ -112,21 +112,21 @@ begin
 				when WRITE_HEADER => 
 					m_axis_tvalid	<= '1';
 					if m_axis_tready = '1' then
-						m_axis_tdata	<= jstk_x(jstk_x'HIGH downto jstk_x'HIGH-JSTK_BITS+1) & zeros;
+						m_axis_tdata	<= zeros & jstk_x(jstk_x'HIGH downto jstk_x'HIGH-JSTK_BITS+1);
 						m_state	<= WRITE_X;
 					end if;
 
 				when WRITE_X => 
 					m_axis_tvalid	<= '1';
 					if m_axis_tready = '1' then
-						m_axis_tdata	<= jstk_y(jstk_y'HIGH downto jstk_y'HIGH-JSTK_BITS+1) & zeros;
+						m_axis_tdata	<= zeros & jstk_y(jstk_y'HIGH downto jstk_y'HIGH-JSTK_BITS+1);
 						m_state	<= WRITE_Y;
 					end if;
 
 				when WRITE_Y => 
 					m_axis_tvalid	<= '1';
 					if m_axis_tready = '1' then
-						m_axis_tdata	<= (1 => btn_jstk, 0 => btn_trigger, Others => '0');
+						m_axis_tdata	<= (0 => btn_jstk, 1 => btn_trigger, Others => '0');
 						m_state	<= WRITE_BTNS;
 					end if;
 

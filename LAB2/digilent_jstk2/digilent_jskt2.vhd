@@ -46,30 +46,26 @@ architecture Behavioral of digilent_jstk2 is
 	signal jstk_x_reg, jstk_y_reg	: std_logic_vector(jstk_x'RANGE) 	:= (Others => '0');
 	--signal btns_reg			: std_logic_vector(1 downto 0)		:= (Others => '0');
 
-	type s_state_type is (RESET, READING_X_L, READING_X_H, READING_Y_L, READING_Y_H, READING_FSB);
-	signal s_state	: s_state_type	:= RESET;
+	type s_state_type is (READING_X_L, READING_X_H, READING_Y_L, READING_Y_H, READING_FSB);
+	signal s_state	: s_state_type	:= READING_X_L;
 	type m_state_type is (RESET, WAITING, WRITE_CMD, WRITE_R, WRITE_G, WRITE_B, WRITE_DUMMY);
 	signal m_state	: m_state_type	:= RESET;
 
 	--constant zeros			: std_logic_vector(m_axis_tdata'HIGH - JSTK_BITS downto 0) := (Others => '0');
 
 begin
-	s_FSM : process (s_state, s_axis_tvalid, s_axis_tdata, aclk, aresetn) 
+	s_FSM : process (aclk, aresetn) 
 	begin 
 		if aresetn = '0' then 
-			s_state <= RESET; 
+			s_state <= READING_X_L; 
 			jstk_x		<= (Others => '0');
 			jstk_y		<= (Others => '0');
+			jstk_x_reg	<= (Others => '0');
+			jstk_y_reg	<= (Others => '0');
 			btn_jstk   	<= '0';
                         btn_trigger	<= '0';
 		elsif rising_edge(aclk) then 
-			case (s_state) is 
-				when RESET => 
-					jstk_x_reg	<= (Others => '0');
-					jstk_y_reg	<= (Others => '0');
-					--btns_reg	<= (Others => '0');
-					s_state <= READING_X_L; 
-
+			case s_state is 
 				when READING_X_L => 
 					if s_axis_tvalid = '1' then
 						jstk_x_reg(7 downto 0)	<= s_axis_tdata;
@@ -79,7 +75,7 @@ begin
 				when READING_X_H => 
 					if s_axis_tvalid = '1' then
 						jstk_x_reg(9 downto 8)	<= s_axis_tdata(1 downto 0);
-						s_state	<= READING_X_H;
+						s_state	<= READING_Y_L;
 					end if;
 
 				when READING_Y_L => 
@@ -104,19 +100,19 @@ begin
 					end if;
 
 				when Others => 
-					s_state <= RESET; -- output sincroni ad aclk
+					s_state <= READING_X_L; -- output sincroni ad aclk
 			end case; 
 		end if; 
 	end process s_FSM;
 
-	m_FSM : process (m_state, m_axis_tready, aclk, aresetn) 
+	m_FSM : process (aclk, aresetn) 
 	begin 
 		if aresetn = '0' then 
 			m_state 	<= RESET; 
 			m_axis_tvalid	<= '0';
 			m_axis_tdata	<= (Others => '0');
 		elsif rising_edge(aclk) then 
-			case (m_state) is 
+			case m_state is 
 				when RESET => 
 					delay_counter	<= 0;
 					m_axis_tvalid	<= '1';
@@ -148,7 +144,7 @@ begin
 					m_axis_tvalid	<= '1';
 					if m_axis_tready = '1' then
 						m_axis_tdata	<= (Others => '0');
-						m_state	<= WAITING;
+						m_state	<= WRITE_DUMMY;
 					end if;
 
 				when WRITE_DUMMY => 
