@@ -33,62 +33,48 @@ entity jstk_uart_bridge is
 end jstk_uart_bridge;
 
 architecture Behavioral of jstk_uart_bridge is
-	/*
-	Implementation of both slave process ( receive leds data from pc to
-	datapath ) and master process ( send joystick data from datapath to
-	pc ) are made with a Finite State Machine (one for each task).
-	*/
+	-- Implementation of both slave process ( receive leds data from pc to
+	-- datapath ) and master process ( send joystick data from datapath to
+	-- pc ) are made with a Finite State Machine (one for each task).
 
-	/*
-	 # Slave: leds from pc to datapath
-	 Definition of the slave_FSM states in the s(lave)_state_type and
-	 declaration of s(lave)_state signal. The states' name describe their
-	 purpose.
-	*/ 
+	-- # Slave: leds from pc to datapath
+	-- Definition of the slave_FSM states in the s(lave)_state_type and
+	-- declaration of s(lave)_state signal. The states' name describe their
+	-- purpose.
 	type s_state_type is (RESET, WAIT_HEADER, WAIT_RED, WAIT_GREEN, WAIT_BLUE);
 	signal s_state	: s_state_type		:= RESET;
 
-	/*
-	Declaration of leds_red and leds_green registers to synchronize outputs
-	*/
+	-- Declaration of leds_red and leds_green registers to synchronize outputs
 	signal led_r_reg	: std_logic_vector(led_r'RANGE)		:= (Others => '0');
 	signal led_g_reg	: std_logic_vector(led_g'RANGE)		:= (Others => '0');
 
-	/*
-	 # Master: joystick data from datapath to pc
-	 Definition of the master_FSM states in the m(aster)_state_type and
-	 declaration of m(aster)_state signal. The states' name describe their
-	 purpose, precisely:
-	 - WAITING is designed to comply the specification described at line 7;
-	 - the others are called WRITTEN_... since when entering the state, the
-	   output commutes to the corresponding value ( e.g. when entering 
-	   WRITTEN_Y, the m_axis_tdata is commuting simultaneously to the
-	   jstk_y value )
-	*/ 
+	-- # Master: joystick data from datapath to pc
+	-- Definition of the master_FSM states in the m(aster)_state_type and
+	-- declaration of m(aster)_state signal. The states' name describe their
+	-- purpose, precisely:
+	-- - WAITING is designed to comply the specification described at line 7;
+	-- - the others are called WRITTEN_... since when entering the state, the
+	--   output commutes to the corresponding value ( e.g. when entering 
+	--   WRITTEN_Y, the m_axis_tdata is commuting simultaneously to the
+	--   jstk_y value )
 	type m_state_type is (RESET, WAITING, WRITTEN_HEADER, WRITTEN_X, WRITTEN_Y, WRITTEN_BTNS);
 	signal m_state	: m_state_type	:= RESET;
 
-	/*
-	Declaration of delay_counter, which is  used to wait for TX_DELAY clock
-	period in the WAITING m_state.
-	*/
+	-- Declaration of delay_counter, which is  used to wait for TX_DELAY clock
+	-- period in the WAITING m_state.
 	signal delay_counter 	: integer range 0 to TX_DELAY	:= 0;
-	/*
-	Declaration of zeros, which is used to pad the m_axis_tdata in order to
-	slice the incoming joystick coordinates ( 10 bits long ) in JSTK_BITS
-	bits ( defined in the generic at line 8 ).
-	*/
+	-- Declaration of zeros, which is used to pad the m_axis_tdata in order to
+	-- slice the incoming joystick coordinates ( 10 bits long ) in JSTK_BITS
+	-- bits ( defined in the generic at line 8 ).
 	constant zeros		: std_logic_vector(m_axis_tdata'HIGH - JSTK_BITS downto 0)	:= (Others => '0');
 
 begin
-	/*
-	# PC Protocol: AXI4-Stream Slave, leds from pc to datapath
-	The sensitivity list presents only aclk and aresetn since the module is
-	synchronous with an asynchronous reset.
-	*/
+	-- # PC Protocol: AXI4-Stream Slave, leds from pc to datapath
+	-- The sensitivity list presents only aclk and aresetn since the module is
+	-- synchronous with an asynchronous reset.
 	s_FSM : process (aclk, aresetn) 
 	begin 
-		/* Asynchronous reset */
+		-- Asynchronous reset
 		if aresetn = '0' then 
 			s_state <= RESET; 		-- State reset
 
@@ -135,7 +121,7 @@ begin
 						led_b	<= s_axis_tdata;	-- Writing directly (and registering at the
 										-- output) the blue led
 						s_state	<= WAIT_HEADER;		-- Since valid data was sent, getting ready
-										-- read next packet
+										-- to read next packet
 					end if;
 
 				when Others => 
@@ -145,14 +131,12 @@ begin
 	end process s_FSM;
 
 
-	/*
-	# PC Protocol: AXI4-Stream Master, joystick data from datapath to pc
-	The sensitivity list presents only aclk and aresetn since the module is
-	synchronous with an asynchronous reset.
-	*/
+	-- # PC Protocol: AXI4-Stream Master, joystick data from datapath to pc
+	-- The sensitivity list presents only aclk and aresetn since the module is
+	-- synchronous with an asynchronous reset.
 	m_FSM : process (aclk, aresetn) 
 	begin 
-		/* Asynchronous reset */
+		-- Asynchronous reset
 		if aresetn = '0' then 
 			m_state 	<= RESET; 		-- State reset
 
@@ -210,7 +194,7 @@ begin
 						-- Preparing for a new packet
 						m_axis_tvalid	<= '1';			-- tvalid='1' is set when switching state to WRITTEN_HEADER
 						m_axis_tdata	<= HEADER_CODE; 	-- Writing the HEADER_CODE in output
-						m_state		<= WRITTEN_HEADER;	-- Switching state only when delay has passed
+						m_state		<= WRITTEN_HEADER;	-- Switching state only when delay has passed	            
 					end if;
 
 				when Others => 

@@ -42,59 +42,49 @@ architecture Behavioral of digilent_jstk2 is
 	-- Determining DELAY_CYCLES using the constraints DELAY_US, CLKFREQ and SPI_SCLKFREQ in the generic of the module
 	constant DELAY_CYCLES 		: integer := DELAY_US * (CLKFREQ / 1_000_000) + CLKFREQ / SPI_SCLKFREQ;
 
-	/*
-	Declaration of delay_counter, which is  used to wait for TX_DELAY clock
-	period in the WAITING m_state.
-	*/
+	-- Declaration of delay_counter, which is  used to wait for TX_DELAY clock
+	-- period in the WAITING m_state.
 	signal delay_counter 		: integer range 0 to DELAY_CYCLES 	:= 0;
 
-	/*
-	Declaration of jstk_x_reg and jstk_y_reg registers to synchronize outputs
-	*/
+	-- Declaration of jstk_x_reg and jstk_y_reg registers to synchronize outputs
 	signal jstk_x_reg		: std_logic_vector(jstk_x'RANGE) 	:= (Others => '0');
 	signal jstk_y_reg		: std_logic_vector(jstk_y'RANGE) 	:= (Others => '0');
 
-	/*
-	 # Slave: joystick data from joystick to datapath
-	 Definition of the slave_FSM states in the s(lave)_state_type and
-	 declaration of s(lave)_state signal. The states' name describe their
-	 purpose.
-	 There is no RESET state since it's not required: since there is no s_axis_tready,
-	 the s_FSM is always receiving data from the joystick, it only stops while aresetn='0':
-	 so the various resets are made only when aresetn='0'.
-	 L stands for low significant bits, H stands for high significant bits.
-	 FSB stands for fsButtons as in the digilent2 jstk manual.
-	*/ 
+	-- # Slave: joystick data from joystick to datapath
+	-- Definition of the slave_FSM states in the s(lave)_state_type and
+	-- declaration of s(lave)_state signal. The states' name describe their
+	-- purpose.
+	-- There is no RESET state since it's not required: since there is no s_axis_tready,
+	-- the s_FSM is always receiving data from the joystick, it only stops while aresetn='0':
+	-- so the various resets are made only when aresetn='0'.
+	-- L stands for low significant bits, H stands for high significant bits.
+	-- FSB stands for fsButtons as in the digilent2 jstk manual.
 	type s_state_type is (READING_X_L, READING_X_H, READING_Y_L, READING_Y_H, READING_FSB);
 	signal s_state	: s_state_type	:= READING_X_L;
 
-	/*
-	 # Master: leds from datapath to joystick
-	 Definition of the master_FSM states in the m(aster)_state_type and
-	 declaration of m(aster)_state signal. The states' name describe their
-	 purpose, precisely:
-	 - WAITING is designed to comply the specification described at line 6;
-	 - the others are called WRITTEN_... since when entering the state, the
-	   output commutes to the corresponding value ( e.g. when entering 
-	   WRITTEN_R, the m_axis_tdata is commuting simultaneously to the 
-	   leds_r value )
-	 - WRITTEN_DUMMY is the state in which we send a valid 0x00 data to
-	   comply with the packet required by the joystick module as written in
-	   the manual
-	*/ 
+	-- # Master: leds from datapath to joystick
+	-- Definition of the master_FSM states in the m(aster)_state_type and
+	-- declaration of m(aster)_state signal. The states' name describe their
+	-- purpose, precisely:
+	-- - WAITING is designed to comply the specification described at line 6;
+	-- - the others are called WRITTEN_... since when entering the state, the
+	--   output commutes to the corresponding value ( e.g. when entering 
+	--   WRITTEN_R, the m_axis_tdata is commuting simultaneously to the 
+	--   leds_r value )
+	-- - WRITTEN_DUMMY is the state in which we send a valid 0x00 data to
+	--   comply with the packet required by the joystick module as written in
+	--   the manual
 	type m_state_type is (RESET, WAITING, WRITTEN_CMD, WRITTEN_R, WRITTEN_G, WRITTEN_B, WRITTEN_DUMMY);
 	signal m_state	: m_state_type	:= RESET;
 
 begin
 
-	/*
-	# JSTK2 Protocol: AXI4-Stream Slave, joystick data from joystick to datapath
-	The sensitivity list presents only aclk and aresetn since the module is
-	synchronous with an asynchronous reset.
-	*/
+	-- # JSTK2 Protocol: AXI4-Stream Slave, joystick data from joystick to datapath
+	-- The sensitivity list presents only aclk and aresetn since the module is
+	-- synchronous with an asynchronous reset.
 	s_FSM : process (aclk, aresetn) 
 	begin 
-		/* Asynchronous reset */
+		-- Asynchronous reset
 		if aresetn = '0' then 
 			s_state <= READING_X_L; 		-- State reset
 
@@ -148,14 +138,12 @@ begin
 		end if; 
 	end process s_FSM;
 
-	/*
-	# JSTK2 Protocol: AXI4-Stream Master, leds data from datapath to joystick
-	The sensitivity list presents only aclk and aresetn since the module is
-	synchronous with an asynchronous reset.
-	*/
+	-- # JSTK2 Protocol: AXI4-Stream Master, leds data from datapath to joystick
+	-- The sensitivity list presents only aclk and aresetn since the module is
+	-- synchronous with an asynchronous reset.
 	m_FSM : process (aclk, aresetn) 
 	begin 
-		/* Asynchronous reset */
+		-- Asynchronous reset
 		if aresetn = '0' then 
 			m_state 	<= RESET; 		-- State reset
 
