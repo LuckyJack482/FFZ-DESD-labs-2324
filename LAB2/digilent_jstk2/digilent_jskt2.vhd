@@ -147,62 +147,44 @@ begin
 		if aresetn = '0' then 
 			m_state 	<= RESET; 		-- State reset
 
-			m_axis_tvalid	<= '0';			-- tvalid='0' when aresetn='0' or when in m_state RESET or WAITING
-			m_axis_tdata	<= (Others => '0');	-- Null data output
+			delay_counter	<= 0;			-- Initializing the delay_counter register
 
 		elsif rising_edge(aclk) then 
 			case m_state is 
 				when RESET => 
-					delay_counter	<= 0;			-- Initializing the delay_counter register
-
-					m_axis_tvalid	<= '1';			-- tvalid='1' is set when switching state to WRITTEN_CMD
-					m_axis_tdata	<= CMDSETLEDRGB;        -- Writing the CMDSETLEDRGB in output
 					m_state <= WRITTEN_CMD;
 
 				when WRITTEN_CMD => 
-					m_axis_tvalid	<= '1';			-- Redundant, should be already '1'
 					if m_axis_tready = '1' then             -- When slave is ready to accept data:
-						m_axis_tdata	<= led_r;	-- Writing led_r to output
 						m_state	<= WRITTEN_R;		-- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_R => 
-					m_axis_tvalid	<= '1';			-- Redundant, should be already '1'
 					if m_axis_tready = '1' then             -- When slave is ready to accept data:
-						m_axis_tdata	<= led_g;       -- Writing led_g to output
 						m_state	<= WRITTEN_G;           -- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_G => 
-					m_axis_tvalid	<= '1';			-- Redundant, should be already '1'
 					if m_axis_tready = '1' then             -- When slave is ready to accept data:
-						m_axis_tdata	<= led_b;       -- Writing led_b to output
 						m_state	<= WRITTEN_B;           -- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_B => 
-					m_axis_tvalid	<= '1';				-- Redundant, should be already '1'
 					if m_axis_tready = '1' then                     -- When slave is ready to accept data:
-						m_axis_tdata	<= (Others => '0');     -- Writing dummy data to output
 						m_state	<= WRITTEN_DUMMY;               -- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_DUMMY => 				
-					m_axis_tvalid	<= '1';			-- Redundant, should be already '1'
 					if m_axis_tready = '1' then             -- When slave is ready to accept data:
-						m_axis_tvalid	<= '0';         -- Switching to WAITING m_state, since the last transaction
 						m_state	<= WAITING;             -- has just happenend, so data during delay will not be valid
 					end if;
 
 				when WAITING => 
-					m_axis_tvalid	<= '0';				-- Redundant, should be already '0'
                                                                                                                                                    
 					delay_counter	<= delay_counter + 1;           -- Using delay_counter to wait
 					if delay_counter = DELAY_CYCLES - 1 then        -- When delay has been accounted
 						delay_counter 	<= 0;                   -- Resetting delay_counter
                                                                                                                                                    
-						m_axis_tvalid	<= '1';                 -- tvalid='1' is set when switching state to WRITTEN_HEADER
-						m_axis_tdata	<= CMDSETLEDRGB;        -- Writing the HEADER_CODE in output
 						m_state		<= WRITTEN_CMD;         -- Switching state only when delay has passed	           
 					end if;
 
@@ -211,5 +193,19 @@ begin
 			end case; 
 		end if; 
 	end process m_FSM;
+
+	with m_state select m_axis_tvalid <=
+		'1' 	when WRITTEN_CMD | WRITTEN_R | WRITTEN_G | WRITTEN_B | WRITTEN_DUMMY,
+		'0'	when Others;
+
+	with m_state select m_axis_tdata <=
+		CMDSETLEDRGB	when WRITTEN_CMD,
+		led_r		when WRITTEN_R,
+		led_g		when WRITTEN_G,
+		led_b		when WRITTEN_B,
+		(Others => '0')	when WRITTEN_DUMMY,
+		(Others => '0')	when Others;
+
+
 
 end architecture;

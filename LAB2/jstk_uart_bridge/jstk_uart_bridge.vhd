@@ -82,39 +82,33 @@ begin
 			led_g	<= (Others => '0');
 			led_b	<= (Others => '0');
 
-			s_axis_tready	<= '0';		-- tready='0' only when aresetn='0' or when still in s_state RESET
+			led_r_reg	<= (Others => '0');	-- Synchronous reset of registers
+			led_g_reg	<= (Others => '0');
 
 		elsif rising_edge(aclk) then 
 			case s_state is 
 				when RESET => 
-					led_r_reg	<= (Others => '0');	-- Synchronous reset of registers
-					led_g_reg	<= (Others => '0');
 					
-					s_axis_tready	<= '1';			-- tready='1' is set when switching state to WAIT_HEADER
 					s_state <= WAIT_HEADER;
 
 				when WAIT_HEADER => 
-					s_axis_tready	<= '1';			-- Redundant, it should already be '1'
 					if s_axis_tvalid = '1' and s_axis_tdata = HEADER_CODE then
 						s_state	<= WAIT_RED;		-- Switching state only when valid data is HEADER_CODE
 					end if;
 
 				when WAIT_RED => 
-					s_axis_tready	<= '1';			 -- Redundant, it should already be '1'
 					if s_axis_tvalid = '1' then
 						led_r_reg	<= s_axis_tdata; -- Saving valid data in registers
 						s_state	<= WAIT_GREEN;           -- Switching state only when data is valid
 					end if;
 
 				when WAIT_GREEN => 
-					s_axis_tready	<= '1';			 -- Redundant, it should already be '1'
 					if s_axis_tvalid = '1' then
 						led_g_reg	<= s_axis_tdata; -- Saving valid data in registers
 						s_state	<= WAIT_BLUE;            -- Switching state only when data is valid
 					end if;
 
 				when WAIT_BLUE => 
-					s_axis_tready	<= '1';			-- Redundant, it should already be '1'
 					if s_axis_tvalid = '1' then		-- Checking blue led validity
 						led_r	<= led_r_reg;		-- Writing the saved values of red and
 						led_g	<= led_g_reg;		-- green leds from registers to output
@@ -130,6 +124,8 @@ begin
 		end if; 
 	end process s_FSM;
 
+	with s_state select s_axis_tready <=	'1' when WAIT_HEADER | WAIT_RED | WAIT_GREEN | WAIT_BLUE,
+						'0' when Others;
 
 	-- # PC Protocol: AXI4-Stream Master, joystick data from datapath to pc
 	-- The sensitivity list presents only aclk and aresetn since the module is
@@ -140,60 +136,45 @@ begin
 		if aresetn = '0' then 
 			m_state 	<= RESET; 		-- State reset
 
-			m_axis_tvalid	<= '0';			-- tvalid='0' when aresetn='0' or when in m_state RESET or WAITING
-			m_axis_tdata	<= (Others => '0');	-- Null data output
+			delay_counter	<= 0;		-- Initializing the delay_counter register
 
 		elsif rising_edge(aclk) then 
 			case m_state is 
 				when RESET => 
-					delay_counter	<= 0;		-- Initializing the delay_counter register
 
-					m_axis_tvalid	<= '1';		-- tvalid='1' is set when switching state to WRITTEN_HEADER
-					m_axis_tdata	<= HEADER_CODE; -- Writing the HEADER_CODE in output
 					m_state <= WRITTEN_HEADER; 
 
 				when WRITTEN_HEADER => 
-					m_axis_tvalid	<= '1';		-- Redundant, should be already '1'
 					if m_axis_tready = '1' then	-- When slave is ready to accept data:
 						-- Writing sliced (to comply to JSTK_BITS) and padded x coord. with zeros to complete a byte
-						m_axis_tdata	<= zeros & jstk_x(jstk_x'HIGH downto jstk_x'HIGH-JSTK_BITS+1);
 
 						m_state	<= WRITTEN_X; 	-- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_X => 
-					m_axis_tvalid	<= '1';		-- Redundant, should be already '1'
 					if m_axis_tready = '1' then	-- When slave is ready to accept data:
 						-- Writing sliced (to comply to JSTK_BITS) and padded y coord. with zeros to complete a byte
-						m_axis_tdata	<= zeros & jstk_y(jstk_y'HIGH downto jstk_y'HIGH-JSTK_BITS+1);
 
 						m_state	<= WRITTEN_Y; 	-- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_Y => 
-					m_axis_tvalid	<= '1';			-- Redundant, should be already '1'
 					if m_axis_tready = '1' then		-- When slave is ready to accept data:
 						-- Writing joystick button and trigger state as in specification (padded with 0s)
-						m_axis_tdata	<= (0 => btn_jstk, 1 => btn_trigger, Others => '0');
 						m_state	<= WRITTEN_BTNS; 	-- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_BTNS => 
-					m_axis_tvalid	<= '1';		-- Redundant, should be already '1'
 					if m_axis_tready = '1' then	-- When slave is ready to accept data:
-						m_axis_tvalid	<= '0'; -- Switching to WAITING m_state, since the last transaction
 						m_state	<= WAITING;	-- has just happenend, so data during delay will not be valid
 					end if;
 
 				when WAITING => 
-					m_axis_tvalid	<= '0';				-- Redundant, should be already '0'
 
 					delay_counter	<= delay_counter + 1;		-- Using delay_counter to wait
 					if delay_counter = TX_DELAY - 1 then		-- When delay has been accounted
 						delay_counter 	<= 0;			-- Resetting delay_counter
 						-- Preparing for a new packet
-						m_axis_tvalid	<= '1';			-- tvalid='1' is set when switching state to WRITTEN_HEADER
-						m_axis_tdata	<= HEADER_CODE; 	-- Writing the HEADER_CODE in output
 						m_state		<= WRITTEN_HEADER;	-- Switching state only when delay has passed	            
 					end if;
 
@@ -202,5 +183,20 @@ begin
 			end case; 
 		end if; 
 	end process m_FSM;
+
+
+	with m_state select m_axis_tvalid <=
+		'1'	when WRITTEN_HEADER | WRITTEN_X | WRITTEN_Y | WRITTEN_BTNS,
+		'0' 	when Others;
+	
+	with m_state select m_axis_tdata <=
+		HEADER_CODE 							when WRITTEN_HEADER,
+		zeros & jstk_x(jstk_x'HIGH downto jstk_x'HIGH-JSTK_BITS+1)	when WRITTEN_X,
+		zeros & jstk_y(jstk_y'HIGH downto jstk_y'HIGH-JSTK_BITS+1)	when WRITTEN_Y,
+		(0 => btn_jstk, 1 => btn_trigger, Others => '0')		when WRITTEN_BTNS,
+		(Others => '0')							when Others;
+
+		
+
 
 end architecture;
