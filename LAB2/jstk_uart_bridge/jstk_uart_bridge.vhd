@@ -82,13 +82,12 @@ begin
 			led_g	<= (Others => '0');
 			led_b	<= (Others => '0');
 
-			led_r_reg	<= (Others => '0');	-- Synchronous reset of registers
+			led_r_reg	<= (Others => '0');	-- Registers reset
 			led_g_reg	<= (Others => '0');
 
 		elsif rising_edge(aclk) then 
 			case s_state is 
 				when RESET => 
-					
 					s_state <= WAIT_HEADER;
 
 				when WAIT_HEADER => 
@@ -124,8 +123,11 @@ begin
 		end if; 
 	end process s_FSM;
 
-	with s_state select s_axis_tready <=	'1' when WAIT_HEADER | WAIT_RED | WAIT_GREEN | WAIT_BLUE,
-						'0' when Others;
+	-- Select the s_axis_tready based on current s_state: the module is
+	-- always ready to read new data, but for when the module is in RESET.
+	with s_state select s_axis_tready <=
+		'1' when WAIT_HEADER | WAIT_RED | WAIT_GREEN | WAIT_BLUE,
+		'0' when Others;
 
 	-- # PC Protocol: AXI4-Stream Master, joystick data from datapath to pc
 	-- The sensitivity list presents only aclk and aresetn since the module is
@@ -146,21 +148,18 @@ begin
 
 				when WRITTEN_HEADER => 
 					if m_axis_tready = '1' then	-- When slave is ready to accept data:
-						-- Writing sliced (to comply to JSTK_BITS) and padded x coord. with zeros to complete a byte
 
 						m_state	<= WRITTEN_X; 	-- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_X => 
 					if m_axis_tready = '1' then	-- When slave is ready to accept data:
-						-- Writing sliced (to comply to JSTK_BITS) and padded y coord. with zeros to complete a byte
 
 						m_state	<= WRITTEN_Y; 	-- Switching state only when a transaction happens
 					end if;
 
 				when WRITTEN_Y => 
 					if m_axis_tready = '1' then		-- When slave is ready to accept data:
-						-- Writing joystick button and trigger state as in specification (padded with 0s)
 						m_state	<= WRITTEN_BTNS; 	-- Switching state only when a transaction happens
 					end if;
 
@@ -185,15 +184,29 @@ begin
 	end process m_FSM;
 
 
+	-- Select the m_axis_tvalid based on current m_state: when valid data
+	-- is on m_axis_tdata (see below), the tvalid must be '1' to make
+	-- the trasaction
 	with m_state select m_axis_tvalid <=
 		'1'	when WRITTEN_HEADER | WRITTEN_X | WRITTEN_Y | WRITTEN_BTNS,
 		'0' 	when Others;
 	
+	-- Select the m_axis_tdata based on current m_state: writing the
+	-- corresponding data on tdata port in order to communicate the data to
+	-- the slave 
 	with m_state select m_axis_tdata <=
+		-- Writing the HEADER_CODE to begin the chain of transactions
 		HEADER_CODE 							when WRITTEN_HEADER,
+
+		-- Writing sliced (to comply to JSTK_BITS) and padded x coord. with zeros to complete a byte
 		zeros & jstk_x(jstk_x'HIGH downto jstk_x'HIGH-JSTK_BITS+1)	when WRITTEN_X,
+
+		-- Writing sliced (to comply to JSTK_BITS) and padded y coord. with zeros to complete a byte
 		zeros & jstk_y(jstk_y'HIGH downto jstk_y'HIGH-JSTK_BITS+1)	when WRITTEN_Y,
+
+		-- Writing joystick button and trigger state as in specification (padded with 0s)
 		(0 => btn_jstk, 1 => btn_trigger, Others => '0')		when WRITTEN_BTNS,
+
 		(Others => '0')							when Others;
 
 		
