@@ -24,7 +24,7 @@
 #*.dcp (checkpoint files: better be ignored!)
 #!*.dcp
 !*.vds
-!*.pb
+*.pb
 #All bd comments and layout coordinates are stored within .ui
 !*.ui
 !*.ooc
@@ -61,5 +61,4 @@
 !*.elf
 !*.bmm
 !*.xmp
-
 # End of https://www.toptal.com/developers/gitignore/api/xilinxvivado
