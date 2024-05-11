@@ -30,33 +30,33 @@ architecture Behavioral of axis_pipeline_template is
   Required registsers to commuicate via AXI4-S.
   Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
   */
-  signal data_reg	          : unsigned(s_axis_tdata'RANGE)  := (Others => '0');
-  signal data_out	          : unsigned(s_axis_tdata'RANGE);
-  signal fe_reg             : std_logic                     := '0';
+  signal data_reg : unsigned(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
+  signal data_out : unsigned(s_axis_tdata'RANGE);                     -- No register, only wire
+  signal fe_reg   : std_logic                     := '0'; -- For more complex modules, also additional filter data (e.g. volume, lfo_period, ...) should be registered
 
 begin
 
   process(aclk, aresetn)
   begin
     if aresetn = '0' then
-      data_reg	        <= (Others => '0');
-      fe_reg            <= '0';
-      m_axis_tvalid     <= '0';
-      m_axis_tlast      <= '0';
+      data_reg      <= (Others => '0');
+      fe_reg        <= '0';
+      m_axis_tvalid <= '0';
+      m_axis_tlast  <= '0';
 
-		elsif rising_edge(aclk) then
-        if (s_axis_tvalid and m_axis_tready) = '1' then
-            data_reg	        <= unsigned(s_axis_tdata);
-            m_axis_tlast      <= s_axis_tlast;
-            fe_reg            <= filter_enable;
-        end if;
-        if m_axis_tready = '1' then
-          m_axis_tvalid <= s_axis_tvalid;
-        end if;
-		end if;
-	end process;
+    elsif rising_edge(aclk) then
+      if (s_axis_tvalid and m_axis_tready) = '1' then
+        data_reg      <= unsigned(s_axis_tdata);
+        m_axis_tlast  <= s_axis_tlast;
+        fe_reg        <= filter_enable;
+      end if;
+      if m_axis_tready = '1' then
+        m_axis_tvalid <= s_axis_tvalid;
+      end if;
+    end if;
+  end process;
 
-  with aresetn select s_axis_tready <=
+  with aresetn select s_axis_tready <=  -- Asynchronous propagation of the m_axis_tready backwards into the chain
   m_axis_tready when '1',
   '0'           when Others;
 
