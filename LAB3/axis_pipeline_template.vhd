@@ -26,10 +26,8 @@ end axis_pipeline_template;
 
 architecture Behavioral of axis_pipeline_template is
 
-  /*
-  Required registsers to commuicate via AXI4-S.
-  Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
-  */
+  -- Required registsers to commuicate via AXI4-S.
+  -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
   signal data_reg : unsigned(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
   signal data_out : unsigned(s_axis_tdata'RANGE);                     -- No register, only wire
   signal fe_reg   : std_logic                     := '0'; -- For more complex modules, also additional filter data (e.g. volume, lfo_period, ...) should be registered
