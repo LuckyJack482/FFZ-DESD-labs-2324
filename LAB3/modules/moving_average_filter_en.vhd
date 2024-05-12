@@ -30,9 +30,12 @@ end moving_average_filter_en;
 architecture Behavioral of moving_average_filter_en is
 
   -- Required registsers to commuicate via AXI4-S.
-  -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
+  -- Furthermore m_axis_tvalid is basically registered
   signal data_out             : signed(s_axis_tdata'RANGE);                     -- No register, only wire
   signal enable_filter_reg    : std_logic                   := '0';             -- Register
+--DOUBLE START------------------------------------------------------------------
+  signal m_axis_tlast_reg : std_logic := '0';
+--DOUBLE END--------------------------------------------------------------------
 
   constant PERIOD_MAF :	positive	:= 2**FILTER_ORDER_POWER;
   constant MAX_J      : positive  := 2**(FILTER_ORDER_POWER-1);
@@ -61,8 +64,6 @@ architecture Behavioral of moving_average_filter_en is
   -- di sinistra e di destra, de commentare i codici richiusi dai trattini
   signal first_data	  : signed(s_axis_tdata'RANGE);     -- No registers, only wires!! No waste of registers or ff
   signal first_sum    : fifo_type;
-
-  signal m_axis_tlast_reg : std_logic := '0';
 --DOUBLE END--------------------------------------------------------------------
 
 begin
