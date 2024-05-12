@@ -49,9 +49,9 @@ begin
   amplification_factor <=
   to_signed(to_integer(balance_reg(balance_reg'HIGH downto BALANCE_STEP_2-1)) - to_integer(balance_reg(balance_reg'HIGH downto BALANCE_STEP_2)) - (2**(balance_WIDTH - BALANCE_STEP_2 - 1)), amplification_factor'LENGTH);
   left_factor   <= unsigned(amplification_factor)   when amplification_factor > 0 else
-                   to_unsigned(1, left_factor'LENGTH);
+                   to_unsigned(0, left_factor'LENGTH);
   right_factor  <= unsigned(- amplification_factor) when amplification_factor < 0 else
-                   to_unsigned(1, right_factor'LENGTH);
+                   to_unsigned(0, right_factor'LENGTH);
   
   with m_axis_tlast_reg select currect_factor <=
   left_factor  when '0',
