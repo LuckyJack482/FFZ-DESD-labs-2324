@@ -35,8 +35,64 @@ architecture Behavioral of LFO is
 
   --lfo_period := LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*joystick_y
 
+-- Required registsers to commuicate via AXI4-S.
+  -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
+  signal data_reg : unsigned(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
+  signal data_out : unsigned(s_axis_tdata'RANGE);                     -- No register, only wire
+  signal lfo_enable_reg   : std_logic              := '0';
+
+  signal triangle : unsigned(TRIANGULAR_COUNTER_LENGTH - 1 downto 0) := (Others => '0');
+  signal direction : std_logic := '1'; --if '1' the slope is positivi, if '0' the slope is negative.
+
 begin
 
--- <=;
+  axis: process(aclk, aresetn)
+  begin
+    if aresetn = '0' then
+      data_reg      <= (Others => '0');
+      fe_reg        <= '0';
+      m_axis_tvalid <= '0';
+      m_axis_tlast  <= '0';
 
-end architecture;
+    elsif rising_edge(aclk) then
+      if (s_axis_tvalid and m_axis_tready) = '1' then
+        data_reg        <= unsigned(s_axis_tdata);
+        m_axis_tlast    <= s_axis_tlast;
+        lfo_enable_reg  <= lfo_enable;
+      end if;
+      if m_axis_tready = '1' then
+        m_axis_tvalid <= s_axis_tvalid;
+      end if;
+    end if;
+  end process axis;
+
+  with aresetn select s_axis_tready <=  -- Asynchronous propagation of the m_axis_tready backwards into the chain
+  m_axis_tready when '1',
+  '0'           when Others;
+
+  with lfo_enable_reg select data_out <=
+  resize((data_reg + 100), data_out'LENGTH) when '1',     -- HERE the example filter is (x + 100), more complicated elaboration of the filter must be made here in datapath
+  data_reg                                  when Others;
+
+  m_axis_tdata  <= std_logic_vector(data_out);  -- Cast only
+
+  with triangle select 
+
+  triangle_wave: process (aclk, aresetn)
+  begin 
+    if aresetn = '0' then
+      triangle <= (Others => '0');
+      direction = '1';
+    elsif rising_edge(aclk) then
+      if direction = '1' then
+        triangle <= triangle + 1;
+      else
+        triangle <= triangle - 1;
+      end if;
+
+
+    end if;
+
+  end process triangle_wave;
+
+end Behavioral;
