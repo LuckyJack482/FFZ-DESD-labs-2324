@@ -78,7 +78,7 @@ s_axis_tready <= aresetn;
 -- If tlast= '1' then s_axis_tdata is a left data.
 get_data: process (aclk, aresetn)
 begin 
-  if aresetn = '1' then
+  if aresetn = '0' then
     --reset    
     data_left  <= (others => '0');
     data_right <= (others => '0');
@@ -100,7 +100,7 @@ average <= resize(((data_left + data_right) sra 1), average'LENGTH);
 --Process used to synchronize the refresh rate of the volume bar depending on the generic refresh_time_ms
 delay: process(aclk, aresetn)
 begin
-  if aresetn = '1' then
+  if aresetn = '0' then
     led             <= (Others => '0');
     counter_cycles  <= 0;
   elsif rising_edge(aclk) then
