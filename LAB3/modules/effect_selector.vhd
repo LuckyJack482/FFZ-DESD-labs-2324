@@ -26,7 +26,7 @@ begin
 
 process (aclk, aresetn)
 begin
-  if aresetn = '1' then
+  if aresetn = '0' then
     
     --Resetting everything
     volume      <= (Others => '0');
@@ -42,6 +42,9 @@ begin
     if effect = '1' then
       jstk_y_lfo <= jstck_y;
     end if;
+    -- NOTA PER FERRO IN PARTICOLARE: per il loro bitstream, è chiaro che se effect = '1', NON AGGIORNA BALANCE!
+    -- cioè
+    -- if effect = '1' then ... else volume <= jstck_y; balance <= jstck_x; end if;
 
   end if;
 end process;
