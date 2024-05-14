@@ -8,7 +8,7 @@ entity volume_controller is
             VOLUME_WIDTH  : positive  := 10;
             VOLUME_STEP_2 : positive  := 6;       -- i.e., volume_values_per_step = 2**VOLUME_STEP_2
             HIGHER_BOUND  : integer   := 2**23-1; -- Inclusive
-            LOWER_BOUND   : integer   := -2**23   -- Inclusive
+            LOWER_BOUND   : integer   := -(2**23)   -- Inclusive
           );
   Port    (
             aclk          : in  std_logic;
@@ -33,42 +33,29 @@ architecture Behavioral of volume_controller is
   -- Required registsers to commuicate via AXI4-S.
   -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
   signal data_reg             : signed(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
-  signal raw_out              : signed(s_axis_tdata'HIGH+2**(VOLUME_WIDTH-VOLUME_STEP_2-1) downto 0); -- No register, only wire
   signal data_out             : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal currect_bound        : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal overflow             : std_logic;                                      -- No register, only wire
-  --signal volume_reg           : unsigned(volume'RANGE)        := (Others => '0');
-  signal volume_reg           : unsigned(volume'HIGH downto VOLUME_STEP_2-1)        := (Others => '0'); -- Register
-  signal amplification_factor : signed(VOLUME_WIDTH-VOLUME_STEP_2 downto 0); -- No register, only wire. Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
+  signal volume_reg           : unsigned(volume'RANGE)        := (Others => '0');
+  -- signal amplification_factor : signed(VOLUME_WIDTH-VOLUME_STEP_2 downto 0); -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
+  signal amplification_factor : integer range -8 to 8; -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
 
 begin
   -- https://opensource.ieee.org/vasg/Packages/-/raw/69e193881d23c76ceaa9f1efeb2c90ebc4b1b515/ieee/numeric_std.vhdl per il sra e il resize
 
   amplification_factor <=
-  to_signed(to_integer(volume_reg(volume_reg'HIGH downto VOLUME_STEP_2-1)) - to_integer(volume_reg(volume_reg'HIGH downto VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1)), amplification_factor'LENGTH);
+  -- to_signed((to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1)), amplification_factor'LENGTH);
+  (to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1));
 
-  raw_out <= to_signed(to_integer(data_reg), raw_out'LENGTH) sla to_integer(amplification_factor); -- Rounding error when dividing negative numbers: can be fix but probably not worth 
+  data_out <=
+  to_signed(HIGHER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), amplification_factor)) >= HIGHER_BOUND else
+  to_signed( LOWER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), amplification_factor)) <= LOWER_BOUND else
+  shift_right(data_reg, - amplification_factor) when amplification_factor < 0 else
+  shift_left(data_reg, amplification_factor); 
 
-  overflow <= -- idea to improve readability: call new constants or signals like sign bit etc 
-  (
-    ((not data_reg(data_reg'HIGH)) and or(raw_out(raw_out'HIGH-1 downto raw_out'HIGH-2**(VOLUME_WIDTH-VOLUME_STEP_2-1)))))  -- when data >=0 <=> data_reg(data_reg'HIGH))='0'
-    or
-    (data_reg(data_reg'HIGH) and nand(raw_out(raw_out'HIGH-1 downto raw_out'HIGH-2**(VOLUME_WIDTH-VOLUME_STEP_2-1)))        -- when data < 0 <=> data_reg(data_reg'HIGH))='1'
-  );
-
-  with data_reg(data_reg'HIGH) select currect_bound <=
-  to_signed(HIGHER_BOUND, currect_bound'LENGTH) when '0', 
-  to_signed( LOWER_BOUND, currect_bound'LENGTH) when Others;
-
-  with overflow select data_out <=
-  resize(raw_out, data_out'LENGTH)  when '0',
-  currect_bound                     when Others;
-
-  axis : process(aclk, aresetn)
+  process(aclk, aresetn)
   begin
     if aresetn = '0' then
       data_reg      <= (Others => '0');
-      volume_reg    <= (volume_reg'HIGH => '1', Others => '0');
+      volume_reg    <= (Others => '0');
       m_axis_tvalid <= '0';
       m_axis_tlast  <= '0';
 
@@ -76,13 +63,13 @@ begin
       if (s_axis_tvalid and m_axis_tready) = '1' then
         data_reg      <= signed(s_axis_tdata);
         m_axis_tlast  <= s_axis_tlast;
-        volume_reg    <= unsigned(volume(volume_reg'RANGE));
+        volume_reg    <= unsigned(volume);
       end if;
       if m_axis_tready = '1' then
         m_axis_tvalid <= s_axis_tvalid;
       end if;
     end if;
-  end process axis;
+  end process;
 
   with aresetn select s_axis_tready <=  -- Asynchronous propagation of the m_axis_tready backwards into the chain
   m_axis_tready when '1',
@@ -91,3 +78,4 @@ begin
   m_axis_tdata  <= std_logic_vector(data_out);  -- Cast only
 
 end Behavioral;
+
