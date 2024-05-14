@@ -31,130 +31,58 @@ architecture Behavioral of moving_average_filter_en is
 
   -- Required registsers to commuicate via AXI4-S.
   -- Furthermore m_axis_tvalid is basically registered
-  signal data_out             : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal enable_filter_reg    : std_logic                   := '0';             -- Register
---DOUBLE START------------------------------------------------------------------
-  signal m_axis_tlast_reg : std_logic := '0';
---DOUBLE END--------------------------------------------------------------------
+  signal data_out           : signed(s_axis_tdata'RANGE);                     -- No register, only wire
+  signal enable_filter_reg  : std_logic                   := '0';             -- Register
+  signal m_axis_tlast_reg   : std_logic := '0';
 
-  constant PERIOD_MAF :	positive	:= 2**FILTER_ORDER_POWER;
-  constant MAX_J      : positive  := 2**(FILTER_ORDER_POWER-1);
+  constant PERIOD_MAF       :	positive	:= 2**FILTER_ORDER_POWER;
   type fifo_type is array (PERIOD_MAF-1 downto 0) of signed(s_axis_tdata'RANGE);
 
---SINGLE START------------------------------------------------------------------
-  -- signal fifo : fifo_type	:= (Others => (Others => '0')); -- Registers in a FIFO configuration
---SINGLE END--------------------------------------------------------------------
+  signal left_fifo          : fifo_type	:= (Others => (Others => '0')); -- Registers in a FIFO configuration
+  signal right_fifo         : fifo_type	:= (Others => (Others => '0')); -- Registers in a FIFO configuration
 
---DOUBLE START------------------------------------------------------------------
-  signal left_fifo  : fifo_type	:= (Others => (Others => '0')); -- Registers in a FIFO configuration
-  signal right_fifo : fifo_type	:= (Others => (Others => '0')); -- Registers in a FIFO configuration
---DOUBLE END--------------------------------------------------------------------
-
-  subtype sum_type is signed(TDATA_WIDTH+FILTER_ORDER_POWER-1 downto 0);
-  type sum_array_type is array (0 to FILTER_ORDER_POWER-1, 0 to MAX_J-1) of sum_type;  -- The last signal could be of 24 + 5 bits, so the range of the signed is chosen like this
-  signal sum_array		: sum_array_type;     -- No registers, only wires!! No waste of registers or ff
-  signal last_sum     : sum_type;           -- No register, only wire
---SINGLE START------------------------------------------------------------------
-  -- signal sum_array		: sum_array_type;     -- No registers, only wires!! No waste of registers or ff
-  -- signal last_sum     : sum_type;           -- No register, only wire
---SINGLE END--------------------------------------------------------------------
-
---DOUBLE START------------------------------------------------------------------
+  signal left_sum           : signed(TDATA_WIDTH+FILTER_ORDER_POWER-1 downto 0) := (Others => '0');
+  signal left_maf           : signed(left_sum'HIGH downto left_sum'HIGH-TDATA_WIDTH+1);
+  signal right_sum          : signed(TDATA_WIDTH+FILTER_ORDER_POWER-1 downto 0) := (Others => '0');
+  signal right_maf          : signed(right_sum'HIGH downto right_sum'HIGH-TDATA_WIDTH+1);
   -- Nell'eventualità in cui è necessario effettuare medie separate tra campioni
   -- di sinistra e di destra, de commentare i codici richiusi dai trattini
-  signal first_data	  : signed(s_axis_tdata'RANGE);     -- No registers, only wires!! No waste of registers or ff
-  signal first_sum    : fifo_type;
---DOUBLE END--------------------------------------------------------------------
 
 begin
 
---SINGLE START------------------------------------------------------------------
-  -- -- Crazy only because it was a bit crazy to implement, but works fine with all generics!
-  -- crazy_i : for i in 0 to FILTER_ORDER_POWER-1 generate
-  --   crazy_j : for j in 0 to MAX_J-1 generate
-  --     crazy_zero : if i = 0 generate
-  --       sum_array(i,j)  <= to_signed(0, sum_array(i,j)'LENGTH) + fifo(2*j) + fifo(2*j + 1);
-  --     end generate crazy_zero;
-  --     crazy_nonzero : if i /= 0 and j < (PERIOD_MAF / 2 / (2**i)) generate
-  --       sum_array(i,j)  <= sum_array(i-1, 2*j) + sum_array(i-1, 2*j + 1);
-  --     end generate crazy_nonzero;
-  --   end generate crazy_j;
-  -- end generate crazy_i;
-  -- last_sum  <= sum_array(sum_array'HIGH, 0);
-  --
-  -- with enable_filter_reg select data_out <= -- Selection of the outuput based on the registered enable_filter
-  -- last_sum(last_sum'HIGH downto last_sum'HIGH-data_out'LENGTH+1)  when '1', -- Upper slice <=> division by 2**FILTER_ORDER_POWER. There is the rounding error when dividing negative numbers
-  -- fifo(0)                                                         when Others;
---SINGLE END--------------------------------------------------------------------
+  ----- THIS IS THE FIXED POINT IDEA
+  -- We can try not lose information by having the moving_average_filter as a signed TDATA_WIDTH+FILTER_ORDER_POWER bit long
 
---DOUBLE START------------------------------------------------------------------
-  -- Crazy only because it was a bit crazy to implement, but works fine with all generics!
-  -- LEFT
-  first_gen : for i in first_sum'RANGE generate
-    with m_axis_tlast_reg select first_sum(i) <=
-    left_fifo(i)  when '0',
-    right_fifo(i) when Others;
-  end generate first_gen;
+  left_maf  <= left_sum(left_maf'RANGE);
+  right_maf <= right_sum(right_maf'RANGE);
 
-  crazy_i : for i in 0 to FILTER_ORDER_POWER-1 generate
-    crazy_j : for j in 0 to MAX_J-1 generate
-      crazy_zero : if i = 0 generate
-        sum_array(i,j)  <= to_signed(0, sum_array(i,j)'LENGTH) + first_sum(2*j) + first_sum(2*j + 1);
-      end generate crazy_zero;
-      crazy_nonzero : if i /= 0 and j < (PERIOD_MAF / 2 / (2**i)) generate
-        sum_array(i,j)  <= sum_array(i-1, 2*j) + sum_array(i-1, 2*j + 1);
-      end generate crazy_nonzero;
-    end generate crazy_j;
-  end generate crazy_i;
-  last_sum  <= sum_array(sum_array'HIGH, 0);
-
-
-  with enable_filter_reg select data_out <= -- Selection of the outuput based on the registered enable_filter
-  last_sum(last_sum'HIGH downto last_sum'HIGH-data_out'LENGTH+1)  when '1', -- Upper slice <=> division by 2**FILTER_ORDER_POWER. There is the rounding error when dividing negative numbers
-  first_sum(0)                                                    when Others;
+  data_out  <=
+  right_maf     when (enable_filter_reg and m_axis_tlast_reg) = '1'     else
+  left_maf      when (enable_filter_reg and not m_axis_tlast_reg) = '1' else
+  right_fifo(0) when (not enable_filter_reg and m_axis_tlast_reg) = '1' else
+  left_fifo(0);
   
   m_axis_tlast  <= m_axis_tlast_reg;
---DOUBLE END--------------------------------------------------------------------
 
   axis : process(aclk, aresetn)
   begin
     if aresetn = '0' then
---SINGLE START------------------------------------------------------------------
-      -- fifo		          <= (Others => (Others => '0'));
---SINGLE END--------------------------------------------------------------------
---DOUBLE START------------------------------------------------------------------
       right_fifo        <= (Others => (Others => '0'));
       left_fifo		      <= (Others => (Others => '0'));
---DOUBLE END--------------------------------------------------------------------
       enable_filter_reg <= '0';
       m_axis_tvalid     <= '0';
-
---SINGLE START------------------------------------------------------------------
-      -- m_axis_tlast      <= '0';
---SINGLE END--------------------------------------------------------------------
---DOUBLE START------------------------------------------------------------------
       m_axis_tlast_reg  <= '0';
---DOUBLE END--------------------------------------------------------------------
 
     elsif rising_edge(aclk) then
       if (s_axis_tvalid and m_axis_tready) = '1' then
---SINGLE START------------------------------------------------------------------
-        -- fifo	<= fifo(fifo'HIGH-1 downto 0) & signed(s_axis_tdata);
---SINGLE END--------------------------------------------------------------------
---DOUBLE START------------------------------------------------------------------
         if s_axis_tlast = '1' then
           right_fifo	<= right_fifo(right_fifo'HIGH-1 downto 0) & signed(s_axis_tdata);
+          right_sum   <= right_sum + (signed(s_axis_tdata) - right_fifo(right_fifo'HIGH));
         elsif s_axis_tlast = '0' then
           left_fifo	  <= left_fifo(left_fifo'HIGH-1 downto 0) & signed(s_axis_tdata);
+          left_sum    <= left_sum + (signed(s_axis_tdata) - left_fifo(left_fifo'HIGH));
         end if;
---DOUBLE END--------------------------------------------------------------------
-
---SINGLE START------------------------------------------------------------------
-        -- m_axis_tlast      <= s_axis_tlast;
---SINGLE END--------------------------------------------------------------------
---DOUBLE START------------------------------------------------------------------
         m_axis_tlast_reg   <= s_axis_tlast;
---DOUBLE END--------------------------------------------------------------------
         enable_filter_reg <= enable_filter;
       end if;
       if m_axis_tready = '1' then
