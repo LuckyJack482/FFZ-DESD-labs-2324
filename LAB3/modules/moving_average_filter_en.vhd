@@ -31,6 +31,7 @@ architecture Behavioral of moving_average_filter_en is
 
   -- Required registsers to commuicate via AXI4-S.
   -- Furthermore m_axis_tvalid is basically registered
+  signal data_reg           : signed(s_axis_tdata'RANGE)  := (Others => '0');
   signal data_out           : signed(s_axis_tdata'RANGE);                     -- No register, only wire
   signal enable_filter_reg  : std_logic                   := '0';             -- Register
   signal m_axis_tlast_reg   : std_logic := '0';
@@ -59,14 +60,14 @@ begin
   data_out  <=
   right_maf     when (enable_filter_reg and m_axis_tlast_reg) = '1'     else
   left_maf      when (enable_filter_reg and not m_axis_tlast_reg) = '1' else
-  right_fifo(0) when (not enable_filter_reg and m_axis_tlast_reg) = '1' else
-  left_fifo(0);
+  data_reg;
   
   m_axis_tlast  <= m_axis_tlast_reg;
 
   axis : process(aclk, aresetn)
   begin
     if aresetn = '0' then
+      data_reg          <= (Others => '0');
       right_fifo        <= (Others => (Others => '0'));
       left_fifo		      <= (Others => (Others => '0'));
       enable_filter_reg <= '0';
@@ -75,12 +76,13 @@ begin
 
     elsif rising_edge(aclk) then
       if (s_axis_tvalid and m_axis_tready) = '1' then
+        data_reg      <= signed(s_axis_tdata);
         if s_axis_tlast = '1' then
-          right_fifo	<= right_fifo(right_fifo'HIGH-1 downto 0) & signed(s_axis_tdata);
-          right_sum   <= right_sum + (signed(s_axis_tdata) - right_fifo(right_fifo'HIGH));
+          right_fifo	<= right_fifo(right_fifo'HIGH-1 downto 0) & data_reg;
+          right_sum   <= right_sum + (data_reg - right_fifo(right_fifo'HIGH));
         elsif s_axis_tlast = '0' then
-          left_fifo	  <= left_fifo(left_fifo'HIGH-1 downto 0) & signed(s_axis_tdata);
-          left_sum    <= left_sum + (signed(s_axis_tdata) - left_fifo(left_fifo'HIGH));
+          left_fifo	  <= left_fifo(left_fifo'HIGH-1 downto 0) & data_reg;
+          left_sum    <= left_sum + (data_reg - left_fifo(left_fifo'HIGH));
         end if;
         m_axis_tlast_reg   <= s_axis_tlast;
         enable_filter_reg <= enable_filter;
