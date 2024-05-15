@@ -68,6 +68,8 @@ begin
   begin
     if aresetn = '0' then
       data_reg          <= (Others => '0');
+      left_sum          <= (Others => '0');
+      right_sum         <= (Others => '0');
       right_fifo        <= (Others => (Others => '0'));
       left_fifo		      <= (Others => (Others => '0'));
       enable_filter_reg <= '0';

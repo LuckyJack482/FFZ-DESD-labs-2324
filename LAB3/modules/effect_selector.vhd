@@ -35,12 +35,12 @@ begin
   
   elsif rising_edge(aclk) then 
     
-    volume  <= jstck_y;
-    balance <= jstck_x;
-    
     -- the module changes LFO period if effect = '1', thus if the button on the board is pushed
     if effect = '1' then
       jstk_y_lfo <= jstck_y;
+    else 
+      volume  <= jstck_y;
+      balance <= jstck_x;
     end if;
     -- NOTA PER FERRO IN PARTICOLARE: per il loro bitstream, è chiaro che se effect = '1', NON AGGIORNA BALANCE!
     -- cioè
