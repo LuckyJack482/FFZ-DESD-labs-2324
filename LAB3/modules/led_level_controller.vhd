@@ -43,7 +43,7 @@ signal data_right : unsigned(CHANNEL_LENGTH - 1 downto 0) := (others => '0');
 signal average    : unsigned(CHANNEL_LENGTH - 2 downto 0) := (Others => '0');
 
 -- signal used to adapt a CHANNEL_LENGTH bit std_logic_vector data in a NUM_LEDS one, in order to match the data size with the led that can be used on the board. 
-signal data_reallocated      : std_logic_vector(led'RANGE);
+signal data_reallocated      : unsigned(led'RANGE);
 
 --signal used to synchronize the value of led every refresh_time_ms as specified in the Generic
 signal pre_led    : std_logic_vector(led'RANGE);
