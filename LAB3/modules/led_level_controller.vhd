@@ -33,7 +33,7 @@ constant N_CLK_CYCLES : positive := (refresh_time_ms * 10**6) / clock_period_ns 
 signal counter_cycles : integer range 0 to N_CLK_CYCLES := 0;
 
 -- number of bits necessary to represent NUM_LEDS in binary
-constant BITS_OF_LED : integer := integer(ceil(log2(real(NUM_LEDS)))); 
+-- constant BITS_OF_LED : integer := integer(ceil(log2(real(NUM_LEDS)))); 
 
 --Signals used to read the data coming from the master
 signal data_left  : unsigned(CHANNEL_LENGTH - 1 downto 0) := (others => '0');
@@ -49,11 +49,6 @@ signal data_reallocated      : std_logic_vector(led'RANGE);
 signal pre_led    : std_logic_vector(led'RANGE);
 
 begin
-
---This reallocation works using the proportion between CHANNEL_LENGTH and NUM_LEDS: 
-data_reallocation : for I in data_reallocated'range generate
-  data_reallocated(i)  <= average((CHANNEL_LENGTH-1)*i/(NUM_LEDS) + 1);
-end generate data_reallocation;
 
 --This establish which leds have to be turned on: 
 --The leds are turned on according to the position of the MSB, thus if the MSB of data_reallocated is in the highest position,
@@ -96,6 +91,9 @@ end process get_data;
 
 -- The average is calculated between the last left packet and the last right one
 average <= resize(((data_left + data_right) sra 1), average'LENGTH);
+
+--The reallocation of the data is done by saving the MSBs
+data_reallocated <= average(average'HIGH downto average'HIGH - NUM_LEDS);
 
 --Process used to synchronize the refresh rate of the volume bar depending on the generic refresh_time_ms
 delay: process(aclk, aresetn)
