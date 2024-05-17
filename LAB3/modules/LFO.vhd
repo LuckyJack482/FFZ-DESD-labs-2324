@@ -44,27 +44,28 @@ architecture Behavioral of LFO is
 
   -- constant MAX_TRIANGLE : unsigned(JOYSTICK_LENGTH - 1 downto 0)    := (Others => '1');
 
-  signal lfo_period : integer := 0;
+  signal lfo_period_reg   : integer range 0 to (LFO_COUNTER_BASE_PERIOD + ADJUSTMENT_FACTOR* to_integer(MIDDLE_JSTK)) := 0;
   --lfo_period := LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*joystick_y
 
-  -- Required registsers to commuicate via AXI4-S.
-  -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
-  signal data_reg         : signed(s_axis_tdata'RANGE) := (Others => '0'); -- Register
-  signal data_out         : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal lfo_enable_reg   : std_logic                     := '0';
-
+  signal jstk_y_reg       : unsigned(jstk_y'RANGE) := ( Others => '0' );
   signal triangle         : unsigned(TRIANGULAR_COUNTER_LENGTH - 1 downto 0) := (Others => '0');
   signal direction        : std_logic := '1'; --if '1' the slope is positive, if '0' the slope is negative.
 
   --counter and its limit value used to create the steps of the triangle wave
   signal time_counter : integer  range 0 to LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*(- to_integer(MIDDLE_JSTK)) := 0;
 
-
-  signal jstk_y_reg : unsigned(jstk_y'RANGE) := ( Others => '0' ); 
+  -- Required registsers to commuicate via AXI4-S.
+  -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
+  signal data_reg1          : signed(s_axis_tdata'RANGE) := (Others => '0'); -- Register
+  signal data_reg2          : signed(s_axis_tdata'RANGE) := (Others => '0'); -- Register
+  signal product            : signed((triangle'LENGTH+data_reg1'LENGTH-1) downto 0)   := (Others => '0');                     -- No register, only wire
+  signal data_out           : signed(s_axis_tdata'RANGE);  -- No register, only wire
+  signal lfo_enable_reg     : std_logic                     := '0';
+  signal m_axis_tlast_reg   : std_logic                     := '0';
+  signal m_axis_tvalid_reg  : std_logic                     := '0';
 
 begin
 
-  lfo_period  <= to_integer(LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*jstk_y_reg);
 
 
   triangle_wave : process (aclk, aresetn)
@@ -74,11 +75,13 @@ begin
       direction     <= '1';
       time_counter  <= 0;
       jstk_y_reg    <= MIDDLE_JSTK;
+      lfo_period_reg  <= to_integer(LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*jstk_y_reg); 
 
     elsif rising_edge(aclk) and lfo_enable_reg = '1' then
       time_counter <= time_counter + 1;
 
-      if time_counter = lfo_period - 1 then
+      if time_counter = lfo_period_reg - 1 then
+        lfo_period_reg  <= to_integer(LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*jstk_y_reg);
         time_counter <= 0;
 
         if direction = '1' then
@@ -104,19 +107,27 @@ begin
   axis : process(aclk, aresetn)
   begin
     if aresetn = '0' then
-      data_reg      <= (Others => '0');
-      lfo_enable_reg        <= '0';
-      m_axis_tvalid <= '0';
-      m_axis_tlast  <= '0';
+      data_reg1         <= (Others => '0');
+      data_reg2         <= (Others => '0');
+      lfo_enable_reg    <= '0';
+      m_axis_tvalid     <= '0';
+      m_axis_tvalid_reg <= '0';
+      m_axis_tlast      <= '0';
+      m_axis_tlast_reg  <= '0';
+      product           <= (Others => '0');
 
     elsif rising_edge(aclk) then
       if (s_axis_tvalid and m_axis_tready) = '1' then
-        data_reg        <= signed(s_axis_tdata);
-        m_axis_tlast    <= s_axis_tlast;
-        lfo_enable_reg  <= lfo_enable;
+        data_reg1         <= signed(s_axis_tdata);
+        data_reg2         <= data_reg1;
+        m_axis_tlast_reg  <= s_axis_tlast;
+        m_axis_tlast      <= m_axis_tlast_reg;
+        lfo_enable_reg    <= lfo_enable;
       end if;
       if m_axis_tready = '1' then
-        m_axis_tvalid <= s_axis_tvalid;
+        m_axis_tvalid_reg <= s_axis_tvalid;
+        m_axis_tvalid     <= m_axis_tvalid_reg;
+        product           <= to_signed(to_integer(triangle) * to_integer(data_reg1), product'LENGTH);
       end if;
     end if;
   end process axis;
@@ -125,9 +136,10 @@ begin
   m_axis_tready when '1',
   '0'           when Others;
 
+  
   with lfo_enable_reg select data_out <=
-  to_signed((to_integer(triangle) * to_integer(data_reg) / (2**TRIANGULAR_COUNTER_LENGTH) ), data_out'LENGTH)  when '1',     -- HERE the example filter is (x + 100), more complicated elaboration of the filter must be made here in datapath
-  data_reg                                                                              when Others;
+  resize(shift_right(product, TRIANGULAR_COUNTER_LENGTH), data_out'LENGTH)  when '1',     -- HERE the example filter is (x + 100), more complicated elaboration of the filter must be made here in datapath
+  data_reg2                                                                 when Others;
 
   m_axis_tdata  <= std_logic_vector(data_out);  -- Cast only
 
