@@ -57,7 +57,7 @@ architecture Behavioral of LFO is
   signal direction : std_logic := '1'; --if '1' the slope is positive, if '0' the slope is negative.
   
   --counter and its limit value used to create the steps of the triangle wave
-  signal time_counter : integer  range 0 to to_integer(LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*(-MIDDLE_JSTK)) := 0;
+  signal time_counter : integer  range 0 to LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*(- to_integer(MIDDLE_JSTK)) := 0;
  
 
   signal jstk_y_reg : unsigned(jstk_y'RANGE) := ( Others => '0' ); 
