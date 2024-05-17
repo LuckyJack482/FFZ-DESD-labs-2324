@@ -124,7 +124,7 @@ begin
   '0'           when Others;
 
   with lfo_enable_reg select data_out <=
-  shift_right(triangle * data_reg, TRIANGULAR_COUNTER_LENGTH)  when '1',     -- HERE the example filter is (x + 100), more complicated elaboration of the filter must be made here in datapath
+  resize(shift_right(triangle * data_reg, TRIANGULAR_COUNTER_LENGTH), data_out'LENGTH)  when '1',     -- HERE the example filter is (x + 100), more complicated elaboration of the filter must be made here in datapath
   data_reg                                  when Others;
 
   m_axis_tdata  <= std_logic_vector(data_out);  -- Cast only
