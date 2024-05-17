@@ -36,18 +36,18 @@ signal counter_cycles : integer range 0 to N_CLK_CYCLES := 0;
 -- constant BITS_OF_LED : integer := integer(ceil(log2(real(NUM_LEDS)))); 
 
 --Signals used to read the data coming from the master
-signal data_left  : unsigned(CHANNEL_LENGTH - 1 downto 0) := (others => '0');
-signal data_right : unsigned(CHANNEL_LENGTH - 1 downto 0) := (others => '0');
+signal data_left        : unsigned(s_axis_tdata'RANGE) := (others => '0');
+signal data_right       : unsigned(s_axis_tdata'RANGE) := (others => '0');
 
 -- signal used to store the average between left and right
-signal average    : unsigned(CHANNEL_LENGTH - 1 downto 0) := (Others => '0');
+signal average          : unsigned(s_axis_tdata'RANGE) := (Others => '0');
 
-signal sum : unsigned(CHANNEL_LENGTH downto 0 ) := (Others => '0');
+signal sum              : unsigned(s_axis_tdata'HIGH + 1 downto 0 ) := (Others => '0');
  -- signal used to adapt a CHANNEL_LENGTH bit std_logic_vector data in a NUM_LEDS one, in order to match the data size with the led that can be used on the board. 
-signal data_reallocated      : unsigned(led'RANGE);
+signal data_reallocated : unsigned(led'RANGE);
 
 --signal used to synchronize the value of led every refresh_time_ms as specified in the Generic
-signal pre_led    : std_logic_vector(led'RANGE);
+signal pre_led          : std_logic_vector(led'RANGE);
 
 begin
 
@@ -90,12 +90,12 @@ begin
    end if;
 end process axis;
 
-sum <= data_left + data_right;
+sum <= resize(data_left + data_right, sum'LENGTH);
 -- The average is calculated between the last left packet and the last right one
 average <= resize(shift_right(sum, 1), average'LENGTH);
 
 --The reallocation of the data is done by saving the MSBs
-data_reallocated <= average(average'HIGH - 1 downto average'HIGH - NUM_LEDS - 1);
+data_reallocated <= average(average'HIGH - 1 downto average'HIGH - NUM_LEDS);
 
 --Process used to synchronize the refresh rate of the volume bar depending on the generic refresh_time_ms
 delay: process(aclk, aresetn)
