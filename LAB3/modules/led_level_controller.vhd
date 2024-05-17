@@ -42,7 +42,7 @@ signal data_right : unsigned(CHANNEL_LENGTH - 1 downto 0) := (others => '0');
 -- signal used to store the average between left and right
 signal average    : unsigned(CHANNEL_LENGTH - 1 downto 0) := (Others => '0');
 
-signal sum : unsigned(CHANNEL_LEGTH downto 0 ) := (Others => '0');
+signal sum : unsigned(CHANNEL_LENGTH downto 0 ) := (Others => '0');
  -- signal used to adapt a CHANNEL_LENGTH bit std_logic_vector data in a NUM_LEDS one, in order to match the data size with the led that can be used on the board. 
 signal data_reallocated      : unsigned(led'RANGE);
 
