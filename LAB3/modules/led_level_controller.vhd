@@ -40,9 +40,10 @@ signal data_left  : unsigned(CHANNEL_LENGTH - 1 downto 0) := (others => '0');
 signal data_right : unsigned(CHANNEL_LENGTH - 1 downto 0) := (others => '0');
 
 -- signal used to store the average between left and right
-signal average    : unsigned(CHANNEL_LENGTH - 2 downto 0) := (Others => '0');
+signal average    : unsigned(CHANNEL_LENGTH - 1 downto 0) := (Others => '0');
 
--- signal used to adapt a CHANNEL_LENGTH bit std_logic_vector data in a NUM_LEDS one, in order to match the data size with the led that can be used on the board. 
+signal sum : unsigned(CHANNEL_LEGTH downto 0 ) := (Others => '0');
+ -- signal used to adapt a CHANNEL_LENGTH bit std_logic_vector data in a NUM_LEDS one, in order to match the data size with the led that can be used on the board. 
 signal data_reallocated      : unsigned(led'RANGE);
 
 --signal used to synchronize the value of led every refresh_time_ms as specified in the Generic
@@ -71,7 +72,7 @@ s_axis_tready <= aresetn;
 --Slave communication: from AXIS_broadcaster to led_level_controller
 --It gets s_axis_tdata and assigns it to data_left or data_right depending on the value of tlast:
 -- If tlast= '1' then s_axis_tdata is a left data.
-get_data: process (aclk, aresetn)
+axis: process (aclk, aresetn)
 begin 
   if aresetn = '0' then
     --reset    
@@ -87,13 +88,14 @@ begin
       end if;
     end if;
    end if;
-end process get_data;
+end process axis;
 
+sum <= data_left + data_right;
 -- The average is calculated between the last left packet and the last right one
-average <= resize(((data_left + data_right) sra 1), average'LENGTH);
+average <= resize(shift_right(sum, 1), average'LENGTH);
 
 --The reallocation of the data is done by saving the MSBs
-data_reallocated <= average(average'HIGH downto average'HIGH - NUM_LEDS);
+data_reallocated <= average(average'HIGH - 1 downto average'HIGH - NUM_LEDS - 1);
 
 --Process used to synchronize the refresh rate of the volume bar depending on the generic refresh_time_ms
 delay: process(aclk, aresetn)
