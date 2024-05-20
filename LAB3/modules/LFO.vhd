@@ -49,18 +49,20 @@ architecture Behavioral of LFO is
 
   -- Required registsers to commuicate via AXI4-S.
   -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
-  signal data_reg         : signed(s_axis_tdata'RANGE) := (Others => '0'); -- Register
-  signal data_out         : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal lfo_enable_reg   : std_logic                     := '0';
+  signal data_reg       : signed(s_axis_tdata'RANGE)                        := (Others => '0'); -- Register
+  signal data_out       : signed(s_axis_tdata'RANGE);                                           -- No register, only wire
+  signal lfo_enable_reg : std_logic                                         := '0';
 
-  signal triangle         : unsigned(TRIANGULAR_COUNTER_LENGTH - 1 downto 0) := (Others => '0');
-  signal direction        : std_logic := '1'; --if '1' the slope is positive, if '0' the slope is negative.
+  signal triangle       : unsigned(TRIANGULAR_COUNTER_LENGTH - 1 downto 0)  := (Others => '0');
+
+  --if '1' the slope is positive, if '0' the slope is negative.
+  signal direction      : std_logic                                         := '1'; 
 
   --counter and its limit value used to create the steps of the triangle wave
-  signal time_counter : integer  range 0 to LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*(- to_integer(MIDDLE_JSTK)) := 0;
+  signal time_counter   : integer  range 0 to LFO_COUNTER_BASE_PERIOD       := 0;
 
 
-  signal jstk_y_reg : unsigned(jstk_y'RANGE) := ( Others => '0' ); 
+  signal jstk_y_reg     : unsigned(jstk_y'RANGE)                            := ( Others => '0' ); 
 
 begin
 
@@ -73,13 +75,14 @@ begin
       triangle      <= (Others => '0');
       direction     <= '1';
       time_counter  <= 0;
-      jstk_y_reg    <= MIDDLE_JSTK;
+      jstk_y_reg    <= MIDDLE_JSTK; -- scelta sensata secondo noi
 
     elsif rising_edge(aclk) and lfo_enable_reg = '1' then
       time_counter <= time_counter + 1;
 
       if time_counter = lfo_period - 1 then
         time_counter <= 0;
+        jstk_y_reg <= unsigned(jstk_y);
 
         if direction = '1' then
           triangle <= triangle + 1;
@@ -93,7 +96,6 @@ begin
           direction <= '0';
         end if;
 
-        jstk_y_reg <= unsigned(jstk_y);
 
       end if;
     end if;

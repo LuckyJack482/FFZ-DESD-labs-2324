@@ -72,7 +72,7 @@ s_axis_tready <= aresetn;
 --Slave communication: from AXIS_broadcaster to led_level_controller
 --It gets s_axis_tdata and assigns it to data_left or data_right depending on the value of tlast:
 -- If tlast= '1' then s_axis_tdata is a left data.
-axis: process (aclk, aresetn)
+axis : process (aclk, aresetn)
 begin 
   if aresetn = '0' then
     --reset    
@@ -95,10 +95,10 @@ sum <= resize(data_left + data_right, sum'LENGTH);
 average <= resize(shift_right(sum, 1), average'LENGTH);
 
 --The reallocation of the data is done by saving the MSBs
-data_reallocated <= average(average'HIGH - 1 downto average'HIGH - NUM_LEDS);
+data_reallocated <= average(average'HIGH downto average'HIGH - NUM_LEDS + 1);
 
 --Process used to synchronize the refresh rate of the volume bar depending on the generic refresh_time_ms
-delay: process(aclk, aresetn)
+delay : process (aclk, aresetn)
 begin
   if aresetn = '0' then
     led             <= (Others => '0');
