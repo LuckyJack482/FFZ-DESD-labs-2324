@@ -1,6 +1,8 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.NUMERIC_STD.ALL;
+use IEEE.MATH_REAL."log2";
+use IEEE.MATH_REAL."ceil";
 
 entity volume_controller is
   Generic (
@@ -34,22 +36,25 @@ architecture Behavioral of volume_controller is
   -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
   signal data_reg             : signed(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
   signal data_out             : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal volume_reg           : unsigned(volume'RANGE)        := (Others => '0');
+  signal volume_reg           : unsigned(volume'RANGE)      := (Others => '0');
   -- signal amplification_factor : signed(VOLUME_WIDTH-VOLUME_STEP_2 downto 0); -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
-  signal amplification_factor : integer range -8 to 8; -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
+  -- signal amplification_factor : integer range -8 to 8; -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
+  constant BITS_OF_AMP_FACTOR : positive := integer(ceil(log2(real(2**VOLUME_WIDTH/2**(VOLUME_STEP_2-1) - 2**VOLUME_WIDTH/2**VOLUME_STEP_2 )))) + 1;
+  signal amplification_factor : signed(BITS_OF_AMP_FACTOR-1 downto 0); -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
 
 begin
   -- https://opensource.ieee.org/vasg/Packages/-/raw/69e193881d23c76ceaa9f1efeb2c90ebc4b1b515/ieee/numeric_std.vhdl per il sra e il resize
 
   amplification_factor <=
   -- to_signed((to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1)), amplification_factor'LENGTH);
-  (to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1));
+  -- (to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1));
+  to_signed((to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1)), amplification_factor'LENGTH);
 
   data_out <=
-  to_signed(HIGHER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), amplification_factor)) >= HIGHER_BOUND else
-  to_signed( LOWER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), amplification_factor)) <= LOWER_BOUND else
-  shift_right(data_reg, - amplification_factor) when amplification_factor < 0 else
-  shift_left(data_reg, amplification_factor); 
+  to_signed(HIGHER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), to_integer(amplification_factor))) >= HIGHER_BOUND else
+  to_signed( LOWER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), to_integer(amplification_factor))) <= LOWER_BOUND else
+  shift_right(data_reg, to_integer(- amplification_factor)) when amplification_factor < 0 else
+  shift_left(data_reg, to_integer(amplification_factor)); 
 
   process(aclk, aresetn)
   begin
