@@ -70,7 +70,7 @@ begin
     if aresetn = '0' then -- Async reset
       triangle        <= (Others => '0');
       direction       <= '1';
-      time_counter    <= (0 => '1', Others => '0');
+      time_counter    <= to_unsigned(1, time_counter'LENGTH);
       jstk_y_reg      <= MIDDLE_JSTK;
       lfo_period_reg  <= resize(LFO_COUNTER_BASE_PERIOD - ADJUSTMENT_FACTOR*MIDDLE_JSTK, lfo_period_reg'LENGTH); 
       product_jstk    <= (Others => '0');
@@ -78,7 +78,7 @@ begin
     elsif rising_edge(aclk) and lfo_enable_reg2 = '1' then -- Logic to generate the triagle wave
       if time_counter = lfo_period_reg then
         lfo_period_reg  <= resize(LFO_COUNTER_BASE_PERIOD - product_jstk, lfo_period_reg'LENGTH);
-        time_counter    <= (0 => '1', Others => '0');
+        time_counter    <= to_unsigned(1, time_counter'LENGTH);
         jstk_y_reg      <= unsigned(jstk_y);
 
         if direction = '1' then
