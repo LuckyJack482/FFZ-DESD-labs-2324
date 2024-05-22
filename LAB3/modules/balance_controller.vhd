@@ -30,56 +30,62 @@ end balance_controller;
 
 architecture Behavioral of balance_controller is
 
-  -- Required registsers to commuicate via AXI4-S.
-  -- Furthermore m_axis_tvalid is basically registered
-  signal m_axis_tlast_reg     : std_logic                   := '0';
-  signal data_reg             : signed(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
-  signal data_out             : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal balance_reg          : unsigned(balance'RANGE)     := (Others => '0');
-
   constant BITS_OF_AMP_FACTOR : positive := integer(ceil(log2(real(2**BALANCE_WIDTH/2**(BALANCE_STEP_2-1) - 2**BALANCE_WIDTH/2**BALANCE_STEP_2 )))) + 1;
-  signal amplification_factor : signed(BITS_OF_AMP_FACTOR-1 downto 0); -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
-  signal left_factor          : integer range 0 to 8;
-  signal right_factor         : integer range 0 to 8;
-  signal currect_factor       : integer range 0 to 8;
+
+  -- Required signals to commuicate via AXI4-S
+  signal m_axis_tlast_reg     : std_logic                   := '0';             -- Register
+  signal data_reg             : signed(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
+  signal data_out             : signed(s_axis_tdata'RANGE);                     -- Wire
+  signal balance_reg          : unsigned(balance'RANGE)     := (Others => '0'); -- Register
+
+  signal amplification_factor : signed(BITS_OF_AMP_FACTOR-1 downto 0);          -- Wire
+  signal left_factor          : integer range 0 to 8;                           -- Wire
+  signal right_factor         : integer range 0 to 8;                           -- Wire
+  signal currect_factor       : integer range 0 to 8;                           -- Wire
 
 begin
 
-  m_axis_tlast  <= m_axis_tlast_reg;
-
-  -- https://opensource.ieee.org/vasg/Packages/-/raw/69e193881d23c76ceaa9f1efeb2c90ebc4b1b515/ieee/numeric_std.vhdl per il sra e il resize
+  -- Conversion from the joystick y to the amplification factor (2^amp_factor) EXACTLY AS IN THE VOLUME!
   amplification_factor <=
   to_signed((to_integer(balance_reg) / (2**(balance_STEP_2-1))) - (to_integer(balance_reg) / (2**balance_STEP_2)) - (2**(balance_WIDTH - balance_STEP_2 - 1)), amplification_factor'LENGTH);
 
+  -- Computing left factor if left channel should be modulated (only reduced)
   left_factor   <= to_integer(amplification_factor)   when amplification_factor >= 0 else 0;
 
+  -- Computing right factor if right channel should be modulated (only reduced)
   right_factor  <= to_integer(- amplification_factor) when amplification_factor <  0 else 0;
   
+  -- Select the factor corresponding to the currect left or right data
   with m_axis_tlast_reg select currect_factor <=
   left_factor  when '0',
   right_factor when Others;
 
+  -- Division by currect factor
   data_out  <= shift_right(data_reg, currect_factor);
 
-  process(aclk, aresetn)
+  -- Direct connection of register tlast_out to output port tlast
+  m_axis_tlast  <= m_axis_tlast_reg;
+
+  -- Process to handle AXI4-S communication
+  axis : process(aclk, aresetn)
   begin
-    if aresetn = '0' then
+    if aresetn = '0' then -- Async reset
       data_reg          <= (Others => '0');
       balance_reg       <= (Others => '0');
       m_axis_tvalid     <= '0';
       m_axis_tlast_reg  <= '0';
 
     elsif rising_edge(aclk) then
-      if (s_axis_tvalid and m_axis_tready) = '1' then
+      if (s_axis_tvalid and m_axis_tready) = '1' then -- Data propagation with valid transaction
         data_reg          <= signed(s_axis_tdata);
         m_axis_tlast_reg  <= s_axis_tlast;
         balance_reg       <= unsigned(balance);
       end if;
-      if m_axis_tready = '1' then
+      if m_axis_tready = '1' then -- Propagation of tvalid, regardless of valid transaction
         m_axis_tvalid <= s_axis_tvalid;
       end if;
     end if;
-  end process;
+  end process axis;
 
   with aresetn select s_axis_tready <=  -- Asynchronous propagation of the m_axis_tready backwards into the chain
   m_axis_tready when '1',
@@ -88,13 +94,3 @@ begin
   m_axis_tdata  <= std_logic_vector(data_out);  -- Cast only
 
 end Behavioral;
-
---   signal balance_factor : integer range 0 to 16;
---   signal left_factor          : integer range -8 to 8;
---   signal right_factor         : integer range -8 to 8;
---   signal currect_factor       : integer range -8 to 8;
-
---   balance_factor <=
---   (to_integer(balance_reg) / (2**(balance_STEP_2-1))) - (to_integer(balance_reg) / (2**balance_STEP_2)); --0 to 16
---   left_factor   <= 8 - balance_factor   when 8 - balance_factor > 0 else 0; -- vedere in rtl su vhdl2008 come implementa la rete di maximum
---   right_factor  <= balance_factor - 8 when balance_factor - 8 >  0 else 0;

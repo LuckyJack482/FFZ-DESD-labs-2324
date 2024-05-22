@@ -10,7 +10,7 @@ entity volume_controller is
             VOLUME_WIDTH  : positive  := 10;
             VOLUME_STEP_2 : positive  := 6;       -- i.e., volume_values_per_step = 2**VOLUME_STEP_2
             HIGHER_BOUND  : integer   := 2**23-1; -- Inclusive
-            LOWER_BOUND   : integer   := -(2**23)   -- Inclusive
+            LOWER_BOUND   : integer   := -(2**23) -- Inclusive
           );
   Port    (
             aclk          : in  std_logic;
@@ -32,51 +32,54 @@ end volume_controller;
 
 architecture Behavioral of volume_controller is
 
-  -- Required registsers to commuicate via AXI4-S.
-  -- Furthermore, m_axis_tlast and m_axis_tvalid are basically registered
+  -- Required signals to commuicate via AXI4-S
   signal data_reg             : signed(s_axis_tdata'RANGE)  := (Others => '0'); -- Register
-  signal data_out             : signed(s_axis_tdata'RANGE);                     -- No register, only wire
-  signal volume_reg           : unsigned(volume'RANGE)      := (Others => '0');
-  -- signal amplification_factor : signed(VOLUME_WIDTH-VOLUME_STEP_2 downto 0); -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
-  -- signal amplification_factor : integer range -8 to 8; -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
+  signal data_out             : signed(s_axis_tdata'RANGE);                     -- Wire
+  signal volume_reg           : unsigned(volume'RANGE)      := (Others => '0'); -- Register
+  -- Output port m_axis_tvalid is registered
+  -- Output port m_axis_tlast is registered
+
   constant BITS_OF_AMP_FACTOR : positive := integer(ceil(log2(real(2**VOLUME_WIDTH/2**(VOLUME_STEP_2-1) - 2**VOLUME_WIDTH/2**VOLUME_STEP_2 )))) + 1;
-  signal amplification_factor : signed(BITS_OF_AMP_FACTOR-1 downto 0); -- Non c'è "- 1" poiché (credo) che può essere anche 8, quindi il bit in più è necessario.
+  signal amplification_factor : signed(BITS_OF_AMP_FACTOR-1 downto 0);          -- Wire
 
 begin
-  -- https://opensource.ieee.org/vasg/Packages/-/raw/69e193881d23c76ceaa9f1efeb2c90ebc4b1b515/ieee/numeric_std.vhdl per il sra e il resize
 
-  amplification_factor <=
-  -- to_signed((to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1)), amplification_factor'LENGTH);
-  -- (to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1));
-  to_signed((to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1)), amplification_factor'LENGTH);
+  -- Conversion from the joystick y to the amplification factor (2^amp_factor)
+  amplification_factor <= to_signed((to_integer(volume_reg) / (2**(VOLUME_STEP_2-1))) - (to_integer(volume_reg) / (2**VOLUME_STEP_2)) - (2**(VOLUME_WIDTH - VOLUME_STEP_2 - 1)), amplification_factor'LENGTH);
 
+  -- Logic to select data_out depending on saturation and the sign of amplification_factor (shift left w/ amplification_factor > 0 otherwise shift right w/ amplification_factor < 0)
   data_out <=
+  -- HIGHER_BOUND when (data_reg << amp_factor) >= HIGHER_BOUND else
   to_signed(HIGHER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), to_integer(amplification_factor))) >= HIGHER_BOUND else
+  -- LOWER_BOUND when (data_reg << amp_factor) <= HIGHER_BOUND else
   to_signed( LOWER_BOUND, data_out'LENGTH)  when to_integer(shift_left(resize(data_reg, data_reg'LENGTH + 2**(VOLUME_WIDTH-VOLUME_STEP_2)), to_integer(amplification_factor))) <= LOWER_BOUND else
+  -- (data_reg >> -amp_factor) when amp_factor < 0 else
   shift_right(data_reg, to_integer(- amplification_factor)) when amplification_factor < 0 else
+  -- (data_reg << amp_factor);
   shift_left(data_reg, to_integer(amplification_factor)); 
 
-  process(aclk, aresetn)
+  -- Process to handle AXI4-S communication
+  axis : process(aclk, aresetn)
   begin
-    if aresetn = '0' then
+    if aresetn = '0' then -- Async reset
       data_reg      <= (Others => '0');
       volume_reg    <= (Others => '0');
       m_axis_tvalid <= '0';
       m_axis_tlast  <= '0';
 
     elsif rising_edge(aclk) then
-      if (s_axis_tvalid and m_axis_tready) = '1' then
+      if (s_axis_tvalid and m_axis_tready) = '1' then -- Data propagation with valid transaction
         data_reg      <= signed(s_axis_tdata);
         m_axis_tlast  <= s_axis_tlast;
         volume_reg    <= unsigned(volume);
       end if;
-      if m_axis_tready = '1' then
+      if m_axis_tready = '1' then -- Propagation of tvalid, regardless of valid transaction
         m_axis_tvalid <= s_axis_tvalid;
       end if;
     end if;
-  end process;
+  end process axis;
 
-  with aresetn select s_axis_tready <=  -- Asynchronous propagation of the m_axis_tready backwards into the chain
+  with aresetn select s_axis_tready <=  -- Asynchronous propagation of the tready backwards in the pipeline
   m_axis_tready when '1',
   '0'           when Others;
 
